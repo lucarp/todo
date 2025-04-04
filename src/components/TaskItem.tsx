@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { Task, TaskStatus } from '@/types';
 import React, { useState } from 'react'; // Import React
-import { updateTaskStatus } from '@/app/actions';
+import { updateTaskStatus, deleteTask } from '@/app/actions';
 
 // Helper for row background color - Maps color_tag to Tailwind bg classes
 // Ensure these colors provide good contrast with your text and status badges
@@ -34,16 +34,18 @@ const getStatusBadgeClasses = (status: TaskStatus): string => {
 interface TaskItemProps extends React.HTMLAttributes<HTMLTableRowElement> {
   task: Task;
   style?: React.CSSProperties;
+  onDelete?: (taskId: number) => void;
 }
 
 const TaskItem = React.forwardRef<HTMLTableRowElement, TaskItemProps>(
-    ({ task, style, ...props }, ref) => {
+    ({ task, style, onDelete, ...props }, ref) => {
         const [currentStatus, setCurrentStatus] = useState<TaskStatus>(task.status);
         const [isUpdating, setIsUpdating] = useState(false);
+        const [isDeleting, setIsDeleting] = useState(false); // State for delete button
 
         const handleStatusChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
             e.stopPropagation();
-            if (isUpdating) return;
+            if (isUpdating || isDeleting) return;
             // ... rest of handleStatusChange logic ...
              const newStatus = e.target.value as TaskStatus;
             if (newStatus === currentStatus) return;
@@ -55,6 +57,36 @@ const TaskItem = React.forwardRef<HTMLTableRowElement, TaskItemProps>(
                 if (result?.error) setCurrentStatus(oldStatus);
             } catch (err) { setCurrentStatus(oldStatus); console.error('Error updating task status:', err); }
             finally { setIsUpdating(false); }
+        };
+
+        // --- Delete Handler ---
+        const handleDeleteClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
+            e.stopPropagation(); // Prevent row click/drag
+            if (isDeleting) return;
+
+            const confirmed = window.confirm(`Are you sure you want to delete task "${task.name}"?`);
+            if (!confirmed) return;
+
+            setIsDeleting(true);
+            try {
+                const result = await deleteTask(task.id);
+                if (result?.error) {
+                    alert(`Error deleting task: ${result.error}`);
+                    setIsDeleting(false); // Re-enable button on error
+                } else {
+                    console.log(`Task ${task.id} marked for deletion.`);
+                    // Call the onDelete callback for parent component (optimistic UI)
+                    if (onDelete) {
+                        onDelete(task.id);
+                    }
+                    // No need to setIsDeleting(false) on success as component will unmount
+                    // Revalidation will handle final state from server
+                }
+            } catch (err) {
+                 console.error("Client-side error deleting task:", err);
+                alert("An unexpected error occurred while deleting.");
+                setIsDeleting(false);
+            }
         };
 
         const displayTags = task.tags?.filter(tag => !['To do', 'In Progress', 'Done'].includes(tag)) || [];
@@ -78,7 +110,7 @@ const TaskItem = React.forwardRef<HTMLTableRowElement, TaskItemProps>(
                     <select
                         value={currentStatus}
                         onChange={handleStatusChange}
-                        disabled={isUpdating}
+                        disabled={isUpdating || isDeleting}
                         className={`text-xs font-medium rounded px-2 py-1 border border-transparent focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 ${statusBadgeClass} ${isUpdating ? 'opacity-70 cursor-not-allowed' : ''}`}
                     >
                         <option value="To do">To do</option>
@@ -103,6 +135,29 @@ const TaskItem = React.forwardRef<HTMLTableRowElement, TaskItemProps>(
                             {displayTags.map(tag => (<span key={tag} className="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-600">{tag}</span>))}
                         </div>
                     ) : ('-')}
+                </td>
+                {/* ***** Action Cell ***** */}
+                <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium border-b border-gray-200">
+                    <button
+                        type="button"
+                        onClick={handleDeleteClick}
+                        disabled={isDeleting}
+                        className="text-red-600 hover:text-red-800 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-red-500 rounded p-1"
+                        title={`Delete task "${task.name}"`}
+                    >
+                       {isDeleting ? (
+                            // Simple spinner/loading indicator
+                            <svg className="animate-spin h-4 w-4 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                       ) : (
+                        // Trash Icon
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                       )}
+                    </button>
                 </td>
             </tr>
         );

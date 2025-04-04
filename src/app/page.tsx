@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation'
 
 import TagFilter from '@/components/TagFilter'; // Import the filter component
+import DoneTaskFilter from '@/components/DoneTaskFilter';
 import { Task } from '@/types';
 import SignOutButton from '@/components/SignOutButton';
 import TaskListDnDContainer from '@/components/TaskListDnDContainer';
@@ -13,6 +14,7 @@ export const dynamic = 'force-dynamic';
 interface TaskListPageProps {
   params: Promise<{ // <-- Make params a Promise
     tags: string | undefined;
+    hideDone?: string;
   }>;
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }
@@ -37,6 +39,7 @@ export default async function TaskListPage({ params /*, searchParams */ }: TaskL
 
   const resolvedParams = await params;
   const tags = resolvedParams.tags;
+  const hideDone = resolvedParams.hideDone;
 
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) redirect('/login')
@@ -48,6 +51,9 @@ export default async function TaskListPage({ params /*, searchParams */ }: TaskL
   // --- Fetch Tasks with Filtering AND Sorting ---
   const selectedTags = tags?.split(',').filter(Boolean) || [];
 
+  // Check the hideDone parameter
+  const shouldHideDone = hideDone === 'true';
+
   let query = supabase
     .from('tasks')
     .select('*')
@@ -58,6 +64,13 @@ export default async function TaskListPage({ params /*, searchParams */ }: TaskL
   if (selectedTags.length > 0) {
     query = query.filter('tags', 'cs', `{${selectedTags.join(',')}}`);
   }
+
+  // ***** Apply hideDone filter *****
+  if (shouldHideDone) {
+    query = query.neq('status', 'Done'); // Filter out tasks where status is 'Done'
+    // Alternatively, filter completed = false if you keep that field synced:
+    // query = query.eq('completed', false);
+  } 
 
   const { data: tasks, error: tasksFetchError } = await query;
 
@@ -82,10 +95,15 @@ export default async function TaskListPage({ params /*, searchParams */ }: TaskL
          {/* Tag Filter (keep as is) */}
         <TagFilter allTags={allTags} />
 
+        {/* Hide Done Filter (takes less space) */}
+        <div className="flex-shrink-0 pt-1"> {/* Add padding-top for alignment */}
+            <DoneTaskFilter />
+        </div>
+
         {/* Task List Table Area - Pass tasks to the DND Container */}
         <div className="bg-white shadow-md rounded-lg overflow-hidden">
             {/* Let the DND Container render the table */}
-            <TaskListDnDContainer initialTasks={typedTasks} filterActive={selectedTags.length > 0}/>
+            <TaskListDnDContainer initialTasks={typedTasks} filterActive={selectedTags.length > 0 || shouldHideDone}/>
         </div>
     </div>
   );

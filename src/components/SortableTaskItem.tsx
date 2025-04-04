@@ -9,9 +9,10 @@ import TaskItem from './TaskItem'; // The original display component
 
 interface SortableTaskItemProps {
     task: Task;
+    onDelete?: (taskId: number) => void;
 }
 
-export default function SortableTaskItem({ task }: SortableTaskItemProps) {
+export default function SortableTaskItem({ task, onDelete }: SortableTaskItemProps) {
     const {
         attributes,
         listeners,
@@ -32,6 +33,6 @@ export default function SortableTaskItem({ task }: SortableTaskItemProps) {
     // We need to render the `tr` and its contents here
     // Pass the refs, styles, and listeners to the `tr`
     return (
-        <TaskItem ref={setNodeRef} style={style} task={task} {...attributes} {...listeners} />
+        <TaskItem ref={setNodeRef} style={style} task={task} {...attributes} {...listeners} onDelete={onDelete} />
     );
 }

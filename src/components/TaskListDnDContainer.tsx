@@ -1,7 +1,7 @@
 // src/components/TaskListDnDContainer.tsx
 'use client'
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     DndContext,
     closestCenter,
@@ -73,6 +73,14 @@ export default function TaskListDnDContainer({ initialTasks, filterActive }: Tas
         }
     };
 
+    // --- Callback for handling deletion from TaskItem ---
+    const handleTaskDelete = useCallback((taskId: number) => {
+        // Optimistically remove the task from the local state
+        setTasks(currentTasks => currentTasks.filter(task => task.id !== taskId));
+         console.log(`Optimistically removed task ${taskId} from UI.`);
+         // Server revalidation will confirm or correct this if delete action failed somehow
+    }, []); // Empty dependency array, setTasks is stable
+
     const dndDisabled = filterActive;
 
     return (
@@ -103,7 +111,7 @@ export default function TaskListDnDContainer({ initialTasks, filterActive }: Tas
                         {tasks.length === 0 && !dndDisabled && ( <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-500 border-b border-gray-200">No tasks yet! Add one?</td></tr> )}
                         {tasks.length === 0 && dndDisabled && ( <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-500 border-b border-gray-200">No tasks match the selected tags.</td></tr> )}
                         {tasks.map((task) => (
-                            <SortableTaskItem key={task.id} task={task} />
+                            <SortableTaskItem key={task.id} task={task} onDelete={handleTaskDelete} />
                         ))}
                     </tbody>
                 </SortableContext>

@@ -210,7 +210,6 @@ export async function addChatMessage(taskId: number, content: string) {
 }
 
 // --- Action for Public Reply (Modified) ---
-// --- Action for Public Reply (Modified for Redirect) ---
 export async function addPublicReply(token: string, replyContent: string) {
 
     replyContent = replyContent.trim();
@@ -421,4 +420,36 @@ export async function reorderTasks(orderedTaskIds: number[]) {
         console.error("Unexpected error in reorderTasks:", err);
         return { error: "An unexpected server error occurred." };
     }
+}
+
+// --- New Delete Task Action ---
+export async function deleteTask(taskId: number) {
+    const supabase = createServerClientCookie(); // Use cookie client
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+        console.error('Auth error in deleteTask');
+        return { error: 'Authentication required' };
+    }
+
+    // Delete the task matching the ID and ensuring the user owns it
+    const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', taskId)
+        .eq('user_id', user.id); // RLS enforces this, but explicit check is good practice
+
+    if (error) {
+        console.error('Error deleting task:', error);
+        // Check for specific errors if needed
+         if (error.code === '42501') {
+             return { error: "Permission denied." };
+         }
+        return { error: `Database error: ${error.message}` };
+    }
+
+    // Revalidate the task list page
+    revalidatePath('/', 'page');
+    console.log(`Task ${taskId} deleted successfully for user ${user.id}`);
+    return { success: true };
 }
