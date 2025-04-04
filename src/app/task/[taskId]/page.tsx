@@ -1,6 +1,5 @@
 // src/app/task/[taskId]/page.tsx
 import { createClient } from '@/lib/supabase/server';
-import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Task, Message } from '@/types'; // Import Message type
@@ -8,21 +7,25 @@ import ChatInterface from '@/components/ChatInterface'; // Import Chat Component
 import TaskDetailHeader from '@/components/TaskDetailHeader'; // Extract header logic
 
 export const dynamic = 'force-dynamic';
-
 interface TaskDetailPageProps {
-    params: { taskId: string };
+    params: Promise<{ // <-- Make params a Promise
+      taskId: string;
+    }>;
+    searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
-    const cookieStore = cookies();
     const supabase = createClient();
+
+    const resolvedParams = await params;
+    const params_taskId = resolvedParams.taskId;
 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
         redirect('/login');
     }
 
-    const taskId = parseInt(params.taskId, 10);
+    const taskId = parseInt(params_taskId, 10);
     if (isNaN(taskId)) {
         notFound();
     }

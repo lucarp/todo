@@ -88,7 +88,7 @@ export default function ChatInterface({ taskId, initialMessages }: ChatInterface
                 setMessages(prev => prev.map(m => m.id === tempId ? result.newMessage : m));
                 // If a token was generated, store it
                 if (result.publicToken) {
-                    setMessageTokens(prev => new Map(prev).set(result.newMessage.id, result.publicToken));
+                    setMessageTokens(prev => new Map(prev).set(result.newMessage.id, result.publicToken || ''));
                 }
             }
             // Handle cases where action might not return newMessage if needed
@@ -152,7 +152,7 @@ export default function ChatInterface({ taskId, initialMessages }: ChatInterface
                                 {/* Link Icon & Tooltip (Only for current user messages with a generated link) */}
                                 {isCurrentUser && publicLink && (
                                      <Popover className="absolute -left-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        {({ open }) => (
+                                        {() => (
                                             <>
                                                 <Popover.Button
                                                     className="p-1 rounded-full text-gray-500 hover:bg-gray-200 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"

@@ -2,7 +2,6 @@
 'use client'
 
 import { useState, useRef, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
 import { addTask } from '@/app/actions'; // Import the server action
 import Link from 'next/link';
 
@@ -16,7 +15,6 @@ const colorOptions = [
 ];
 
 export default function NewTaskPage() {
-    const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const formRef = useRef<HTMLFormElement>(null); // Ref for potential reset

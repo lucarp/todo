@@ -1,6 +1,5 @@
 // src/app/page.tsx
 import { createClient } from '@/lib/supabase/server'
-import { cookies } from 'next/headers'
 import Link from 'next/link';
 import { redirect } from 'next/navigation'
 
@@ -12,10 +11,10 @@ import TaskListDnDContainer from '@/components/TaskListDnDContainer';
 export const dynamic = 'force-dynamic';
 
 interface TaskListPageProps {
-  searchParams?: {
-    tags?: string; // Comma-separated list of tags
-    // Add other potential filters here later (e.g., status, search term)
-  };
+  params: Promise<{ // <-- Make params a Promise
+    tags: string | undefined;
+  }>;
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 // *** Ensure this function exists in Supabase SQL Editor ***
@@ -33,19 +32,21 @@ interface TaskListPageProps {
    GRANT EXECUTE ON FUNCTION get_distinct_tags_for_user() TO authenticated;
 */
 
-export default async function TaskListPage({ searchParams }: TaskListPageProps) {
-  const cookieStore = cookies()
+export default async function TaskListPage({ params /*, searchParams */ }: TaskListPageProps) {
   const supabase = createClient()
+
+  const resolvedParams = await params;
+  const tags = resolvedParams.tags;
 
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) redirect('/login')
 
   // --- Fetch Tags (keep existing logic) ---
-  const { data: distinctTagsData, error: tagsError } = await supabase.rpc('get_distinct_tags_for_user');
+  const { data: distinctTagsData } = await supabase.rpc('get_distinct_tags_for_user');
   const allTags: string[] = distinctTagsData || [];
 
   // --- Fetch Tasks with Filtering AND Sorting ---
-  const selectedTags = searchParams?.tags?.split(',').filter(Boolean) || [];
+  const selectedTags = tags?.split(',').filter(Boolean) || [];
 
   let query = supabase
     .from('tasks')

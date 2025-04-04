@@ -4,7 +4,7 @@
 import { Task, TaskStatus } from '@/types';
 import { useState, FormEvent } from 'react';
 import { updateTaskStatus, updateTaskDetails } from '@/app/actions';
-import { useRouter } from 'next/navigation';
+
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -44,7 +44,6 @@ interface TaskDetailHeaderProps {
 }
 
 export default function TaskDetailHeader({ task }: TaskDetailHeaderProps) {
-    const router = useRouter();
 
     // --- States remain the same ---
     const [isEditing, setIsEditing] = useState(false);
@@ -130,7 +129,6 @@ export default function TaskDetailHeader({ task }: TaskDetailHeaderProps) {
 
     // --- Calculate display values (used when NOT editing) ---
     const displayTags = task.tags?.filter(tag => !['To do', 'In Progress', 'Done'].includes(tag)) || [];
-    const tagClassName = getTagClasses(task.color_tag);
     const statusBadgeClass = getStatusBadgeClasses(currentStatus);
 
     return (

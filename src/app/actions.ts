@@ -6,7 +6,6 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 // Keep the import for the cookie-based client for other actions
 import { createClient as createServerClientCookie } from '@/lib/supabase/server'
 
-import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { TaskStatus, Task, Message } from '@/types'
@@ -24,10 +23,78 @@ function parseStringToArray(input: string | null | undefined): string[] | null {
     return Array.from(new Set(array)); // Use Set for uniqueness
 }
 
+// Helper to parse tags from a comma-separated string
+function parseTags(tagsString: string | null | undefined): string[] | null {
+    if (!tagsString?.trim()) {
+        return null;
+    }
+    return tagsString.split(',')
+                     .map(tag => tag.trim())
+                     .filter(tag => tag !== '') // Remove empty tags
+                     .filter((tag, index, self) => self.indexOf(tag) === index); // Make unique
+}
+
 const emailPrefixRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\s+/;
 
+
+export async function addTask(formData: FormData) {
+    const supabase = createServerClientCookie()
+  
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+  
+    if (authError || !user) {
+      console.error('Auth error in addTask:', authError)
+      redirect('/login')
+    }
+  
+    const name = formData.get('name') as string
+    const description = formData.get('description') as string | null
+    const deadline = formData.get('deadline') as string | null // Should be YYYY-MM-DD format
+    const colorTag = formData.get('color_tag') as string | null
+    const tagsInput = formData.get('tags') as string | null
+    const initialStatus: TaskStatus = 'To do'; // New tasks always start as 'To do'
+  
+    // Basic validation
+    if (!name || name.trim() === '') {
+      // Consider returning an error message instead of just logging
+      console.error('Task name is required')
+      return { error: 'Task name is required' }
+    }
+  
+    const tags = parseTags(tagsInput);
+  
+    // The database trigger will handle adding the 'To do' tag automatically.
+    // No need to manually add initialStatus to the tags array here if trigger exists.
+  
+    const { error } = await supabase
+      .from('tasks')
+      .insert({
+        user_id: user.id,
+        name: name.trim(),
+        description: description?.trim() || null,
+        deadline: deadline || null,
+        color_tag: colorTag || null,
+        tags: tags, // Pass the parsed tags
+        status: initialStatus,
+        // 'completed' field might become redundant. Decide if you want to keep it synced with status='Done'.
+        // For simplicity, let's update it along with status later if needed, or remove it.
+        completed: false // Set initial completed state
+      })
+  
+    if (error) {
+      console.error('Error inserting task:', error)
+      return { error: `Database error: ${error.message}` }
+    }
+  
+    // Revalidate the task list page cache
+    revalidatePath('/', 'page') // Use 'page' for App Router path revalidation
+  
+    // Redirect back to the list after successful insertion
+    redirect('/')
+  }
+  
+
 export async function addChatMessage(taskId: number, content: string) {
-    const cookieStore = cookies()
     const supabase = createServerClientCookie() // Use server client
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -211,7 +278,6 @@ export async function addPublicReply(token: string, replyContent: string) {
 export async function updateTaskStatus(taskId: number, newStatus: TaskStatus) {
     'use server' // Redundant if already at top level, but doesn't hurt
 
-    const cookieStore = cookies()
     const supabase = createServerClientCookie()
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -246,7 +312,6 @@ export async function updateTaskStatus(taskId: number, newStatus: TaskStatus) {
 // ***** Add export here *****
 export async function updateTaskDetails(taskId: number, formData: FormData) {
     // ... implementation as provided before ...
-     const cookieStore = cookies()
        const supabase = createServerClientCookie()
  
        const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -313,7 +378,6 @@ export async function updateTaskDetails(taskId: number, formData: FormData) {
 
  // --- Action for Reordering (Using individual UPDATES) ---
 export async function reorderTasks(orderedTaskIds: number[]) {
-    const cookieStore = cookies()
     const supabase = createServerClientCookie(); // Use cookie client for user context
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();

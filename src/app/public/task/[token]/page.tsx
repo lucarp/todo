@@ -7,7 +7,10 @@ import PublicReplyForm from '@/components/PublicReplyForm'; // Client component 
 export const dynamic = 'force-dynamic'; // Ensure fresh check on each load
 
 interface PublicTaskPageProps {
-  params: { token: string }
+    params: Promise<{ // <-- Make params a Promise
+      token: string;
+    }>;
+    searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 // Data type combining necessary info
@@ -93,7 +96,9 @@ async function getPublicTaskData(token: string): Promise<PublicTaskData | { erro
 
 
 export default async function PublicTaskPage({ params }: PublicTaskPageProps) {
-  const token = params.token;
+  const resolvedParams = await params;
+  const token = resolvedParams.token;
+  
   const result = await getPublicTaskData(token);
 
   // Handle Not Found or Error States

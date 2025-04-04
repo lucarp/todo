@@ -58,9 +58,17 @@ export default function LoginPage() {
       }
 
 
-    } catch (err: any) {
-      console.error('Authentication error:', err)
-      setError(err.message || 'An unexpected error occurred.')
+    } catch (err: unknown) { // <-- Catch as unknown
+      console.error('Authentication error:', err); // Log the raw error
+  
+      // Type check before accessing properties
+      let errorMessage = 'An unexpected error occurred.';
+      if (err instanceof Error) {
+          errorMessage = err.message; // Safe to access .message now
+      } else if (typeof err === 'string') {
+          errorMessage = err; // Handle if the error is just a string
+      }
+      setError(errorMessage || 'An unexpected error occurred.')
     }
   }
 
