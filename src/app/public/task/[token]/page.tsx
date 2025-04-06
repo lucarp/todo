@@ -1,6 +1,5 @@
 // src/app/public/task/[token]/page.tsx
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'; // Import base client
-import { cookies } from 'next/headers'; // Not needed here, remove if unused elsewhere
 import { notFound } from 'next/navigation';
 import { Task, Message } from '@/types';
 import PublicReplyForm from '@/components/PublicReplyForm';
