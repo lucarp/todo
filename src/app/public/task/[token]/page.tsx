@@ -7,9 +7,10 @@ import PublicReplyForm from '@/components/PublicReplyForm';
 export const dynamic = 'force-dynamic';
 
 interface PublicTaskPageProps {
-  params: { token: string }
+    params: Promise<{ // <-- Make params a Promise
+        token: string;
+    }>;
 }
-
 interface PublicTaskData { /* ... interface definition ... */
      task: Pick<Task, 'id' | 'name' | 'description'>;
     message: Pick<Message, 'id' | 'content' | 'created_at'>;
@@ -105,7 +106,8 @@ async function getPublicTaskData(token: string): Promise<PublicTaskData | { erro
 
 // --- Main Page Component ---
 export default async function PublicTaskPage({ params }: PublicTaskPageProps) {
-  const token = params.token;
+    const resolvedParams = await params;
+    const token = resolvedParams.token;
   const result = await getPublicTaskData(token);
 
   // ... rest of the component remains the same (error handling, rendering) ...
