@@ -1,9 +1,10 @@
 // src/app/page.tsx
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
-import { redirect } from 'next/navigation'
+import { redirect } from 'next/navigation';
+import { Suspense } from 'react'; // Import Suspense
 
-import TagFilter from '@/components/TagFilter'; // Import the filter component
+import TagFilter from '@/components/TagFilter';
 import DoneTaskFilter from '@/components/DoneTaskFilter';
 import { Task } from '@/types';
 import SignOutButton from '@/components/SignOutButton';
@@ -11,12 +12,10 @@ import TaskListDnDContainer from '@/components/TaskListDnDContainer';
 
 export const dynamic = 'force-dynamic';
 
+// Define Props using the Promise pattern for searchParams
 interface TaskListPageProps {
-  params: Promise<{ // <-- Make params a Promise
-    tags: string | undefined;
-    hideDone?: string;
-  }>;
-  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+  // No dynamic params for the root page
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 // *** Ensure this function exists in Supabase SQL Editor ***
@@ -34,56 +33,80 @@ interface TaskListPageProps {
    GRANT EXECUTE ON FUNCTION get_distinct_tags_for_user() TO authenticated;
 */
 
-export default async function TaskListPage({ params /*, searchParams */ }: TaskListPageProps) {
+// ----- Inner Component for Data Fetching based on Search Params -----
+// This component will receive the resolved searchParams or await the promise itself
+async function FilteredTaskList({ searchParamsPromise }: { searchParamsPromise: TaskListPageProps['searchParams'] }) {
+    const supabase = createClient(); // Get client instance here
+
+    // ***** Await the searchParams Promise *****
+    const resolvedSearchParams = await searchParamsPromise;
+
+    // --- Read parameters correctly from the resolved object ---
+    const tagsQueryParam = resolvedSearchParams?.tags;
+    const selectedTags = typeof tagsQueryParam === 'string'
+        ? tagsQueryParam.split(',').filter(Boolean)
+        : [];
+    const shouldHideDone = resolvedSearchParams?.hideDone === 'true';
+
+    // --- Fetch Tasks with Filtering logic ---
+    console.log('--- Fetching Filtered Task List ---');
+    console.log('Using Tags:', selectedTags);
+    console.log('Using Hide Done:', shouldHideDone);
+
+    let query = supabase
+      .from('tasks')
+      .select('*')
+      .order('sort_order', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: true });
+
+    if (selectedTags.length > 0) {
+      query = query.filter('tags', 'cs', `{${selectedTags.join(',')}}`);
+    }
+    if (shouldHideDone) {
+        query = query.neq('status', 'Done');
+    }
+
+    const { data: tasks, error: tasksFetchError } = await query;
+
+    if (tasksFetchError) {
+        console.error('Error fetching tasks:', tasksFetchError);
+        return <div className="p-4 text-red-600">Error loading tasks. Please try again later.</div>;
+    }
+    const typedTasks: Task[] = tasks || [];
+
+    return (
+         <TaskListDnDContainer
+            initialTasks={typedTasks}
+            // Determine if DND should be disabled based on resolved params
+            filterActive={selectedTags.length > 0 || shouldHideDone}
+        />
+    );
+}
+// ----- End Inner Component -----
+
+
+// ----- Main Page Component -----
+export default async function TaskListPage({ searchParams }: TaskListPageProps) { // searchParams is now a Promise
   const supabase = createClient()
 
-  const resolvedParams = await params;
-  const tags = resolvedParams.tags;
-  const hideDone = resolvedParams.hideDone;
-
+  // Perform checks/fetches independent of task filters first
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) redirect('/login')
 
-  // --- Fetch Tags (keep existing logic) ---
+  // --- Fetch Tags (independent of task filter) ---
   const { data: distinctTagsData } = await supabase.rpc('get_distinct_tags_for_user');
   const allTags: string[] = distinctTagsData || [];
 
-  // --- Fetch Tasks with Filtering AND Sorting ---
-  const selectedTags = tags?.split(',').filter(Boolean) || [];
+  // ***** Generate a key based on the searchParams *Promise* reference (or resolve it first) *****
+  // To ensure the key changes when the URL changes client-side, we need to resolve
+  // the promise here too to get the *current* values for the key.
+  const resolvedSearchParamsForKey = await searchParams;
+  const filterKey = `tags=${resolvedSearchParamsForKey?.tags || ''}&hideDone=${resolvedSearchParamsForKey?.hideDone || 'false'}`;
 
-  // Check the hideDone parameter
-  const shouldHideDone = hideDone === 'true';
-
-  let query = supabase
-    .from('tasks')
-    .select('*')
-    // ***** Order by sort_order first, then created_at *****
-    .order('sort_order', { ascending: true, nullsFirst: false }) // NULLS LAST (false means last for ASC)
-    .order('created_at', { ascending: true });
-
-  if (selectedTags.length > 0) {
-    query = query.filter('tags', 'cs', `{${selectedTags.join(',')}}`);
-  }
-
-  // ***** Apply hideDone filter *****
-  if (shouldHideDone) {
-    query = query.neq('status', 'Done'); // Filter out tasks where status is 'Done'
-    // Alternatively, filter completed = false if you keep that field synced:
-    // query = query.eq('completed', false);
-  } 
-
-  const { data: tasks, error: tasksFetchError } = await query;
-
-  if (tasksFetchError) { /* ... error handling ... */
-       console.error('Error fetching tasks:', tasksFetchError);
-       return <div className="p-4 text-red-600">Error loading tasks. Please try again later.</div>;
-  }
-
-  const typedTasks: Task[] = tasks as Task[] || [];
 
   return (
     <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-        {/* Header Section (keep as is) */}
+        {/* Header Section */}
         <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">My Tasks</h1>
              <div className="flex items-center gap-4">
@@ -92,18 +115,19 @@ export default async function TaskListPage({ params /*, searchParams */ }: TaskL
              </div>
         </div>
 
-         {/* Tag Filter (keep as is) */}
-        <TagFilter allTags={allTags} />
+         {/* Filters Row */}
+         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4 pb-4 border-b border-gray-200">
+             <div className="flex-grow"><TagFilter allTags={allTags} /></div>
+             <div className="flex-shrink-0 pt-1"><DoneTaskFilter /></div>
+         </div>
 
-        {/* Hide Done Filter (takes less space) */}
-        <div className="flex-shrink-0 pt-1"> {/* Add padding-top for alignment */}
-            <DoneTaskFilter />
-        </div>
-
-        {/* Task List Table Area - Pass tasks to the DND Container */}
+        {/* Task List Table Area */}
         <div className="bg-white shadow-md rounded-lg overflow-hidden">
-            {/* Let the DND Container render the table */}
-            <TaskListDnDContainer initialTasks={typedTasks} filterActive={selectedTags.length > 0 || shouldHideDone}/>
+             {/* Use Suspense for the async component */}
+             <Suspense fallback={<div className="p-10 text-center text-gray-500">Loading tasks...</div>}>
+                 {/* Pass the searchParams *Promise* and the *key* */}
+                 <FilteredTaskList key={filterKey} searchParamsPromise={searchParams} />
+             </Suspense>
         </div>
     </div>
   );
