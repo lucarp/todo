@@ -287,7 +287,7 @@ async def fetch_task_context(user_uuid: str) -> str:
         tasks_res = supabase.table('tasks').select('id, name, description, status, deadline, tags') \
                       .eq('user_id', user_uuid) \
                       .order('status', desc=False) \
-                      .order('sort_order', nulls_first=True) \
+                      .order('sort_order', nullsfirst=True) \
                       .order('created_at', desc=True) \
                       .limit(30).execute()
 
